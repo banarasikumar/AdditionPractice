@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>1-Digit Addition Practice</title>
+  <style>
+    :root { --primary: #5B9DF9; --secondary: #F95B72; --accent: #F9D65E; --bg: #E8F1F5; --text: #333; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 0; height: 100vh; display: flex; flex-direction: column; background: var(--bg); font-family: 'Segoe UI', sans-serif; color: var(--text); overflow: hidden; }
+    header { display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 1rem; background: var(--primary); color: #fff; font-size: 1.2rem; }
+    .timer { font-size: 1.4rem; }
+    .qa-row { display: flex; align-items: center; justify-content: center; margin: 2rem 1rem; padding: 1rem 1.5rem; gap: 1rem; background: var(--primary); border-radius: 1rem; box-shadow: 0 4px 10px rgba(0,0,0,0.1); color: #fff; font-size: 3rem; }
+    .answer-box { width: 8rem; height: 5rem; border: 3px solid var(--secondary); border-radius: 0.75rem; background: #fff; font-size: 2.5rem; text-align: center; line-height: 5rem; box-shadow: 0 2px 6px rgba(0,0,0,0.1); color: var(--text); }
+    .feedback { text-align: center; font-size: 2rem; height: 2.5rem; margin-bottom: 1rem; color: var(--secondary); cursor: pointer; }
+    .feedback.correct { color: #080; }
+    .feedback.correct::before { content: '✓ '; }
+    .feedback.wrong { color: #d00; }
+    .feedback.wrong::before { content: '✗ '; }
+    .feedback.ready { color: var(--accent); }
+    .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; padding: 1rem; margin-top: auto; background: #fff; }
+    .numpad button { font-size: 2rem; padding: 1.25rem; border: none; border-radius: 0.75rem; background: var(--accent); color: #fff; touch-action: manipulation; box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
+    .numpad button:active { background: var(--secondary); }
+    #ready-btn { grid-column: 1 / -1; margin-bottom: 0.5rem; background: var(--secondary); }
+    #transition { position: absolute; width: 100%; height: 100%; top: 0; left: 0; z-index: 20; pointer-events: none; perspective: 800px; }
+    .cone { position: absolute; bottom: 0; left: 0; width: 0; height: 0; border-left: 60px solid transparent; border-right: 60px solid transparent; border-top: 120px solid var(--secondary); transform-origin: 50% 100%; transform: rotateX(30deg) rotateZ(-30deg) translate(40px, -20px); filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.3)); }
+    .paper { position: absolute; width: 12px; height: 12px; background-color: var(--accent); }
+    @keyframes paper-blast { 0% { opacity:1; transform: translate3d(0,0,0) rotate3d(1,1,0,0deg); } 100% { opacity:0; transform: translate3d(var(--tx),var(--ty),var(--tz)) rotate3d(var(--rx),var(--ry),var(--rz),720deg); } }
+    @keyframes fall { 0%{opacity:1;}100%{opacity:0;transform:translateY(100vh);} }
+    #end-screen { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.8); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 2rem; display: none; z-index:30; }
+    #end-screen button { margin-top:1rem; padding:0.5rem 1rem; font-size:1.25rem; border:none; border-radius:0.5rem; background:var(--accent); color:#fff; }
+  </style>
+</head>
+<body>
+  <header>
+    <div id="qnum">Question: 0/30</div>
+    <div class="timer" id="timer">00:00</div>
+    <div id="score">Score: 0</div>
+  </header>
+  <div class="qa-row">
+    <div class="question" id="question">0 + 0 =</div>
+    <div class="answer-box" id="answer"></div>
+  </div>
+  <div class="feedback" id="feedback"></div>
+  <div class="numpad" id="pad">
+    <button id="ready-btn">I’m Ready</button>
+    <button data-num="1">1</button>
+    <button data-num="2">2</button>
+    <button data-num="3">3</button>
+    <button data-num="4">4</button>
+    <button data-num="5">5</button>
+    <button data-num="6">6</button>
+    <button data-num="7">7</button>
+    <button data-num="8">8</button>
+    <button data-num="9">9</button>
+    <button data-fn="exit">Exit</button>
+    <button data-num="0">0</button>
+    <button data-fn="back">⌫</button>
+  </div>
+  <div id="transition"></div>
+  <div id="end-screen">
+    <div>Great Job!</div>
+    <div id="final-score"></div>
+    <button onclick="location.reload()">Play Again</button>
+  </div>
+  <audio id="pop-sound"><source src="pop.mp3" type="audio/mpeg" /></audio>
+  <script>
+    let a,b,correct,input=''; let qIndex=0, score=0; const total=20;
+    let startTime=Date.now(), qStart, timerInterval, inTransition=false;
+    const qEl=document.getElementById('question'), ansEl=document.getElementById('answer');
+    const fbEl=document.getElementById('feedback'), qnumEl=document.getElementById('qnum');
+    const scoreEl=document.getElementById('score'), timerEl=document.getElementById('timer');
+    const pad=document.getElementById('pad'), readyBtn=document.getElementById('ready-btn');
+    const trans=document.getElementById('transition'), endEl=document.getElementById('end-screen');
+    const finalScoreEl=document.getElementById('final-score'), popSound=document.getElementById('pop-sound');
+
+    function formatTime(ms){ const s=Math.floor(ms/1000), m=Math.floor(s/60), sec=s%60; return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`; }
+    function startTimer(){ timerInterval=setInterval(()=>timerEl.textContent=formatTime(Date.now()-startTime),500); }
+    function stopTimer(){ clearInterval(timerInterval); }
+    startTimer();
+
+    function showReady(){ readyBtn.style.display='block'; }
+    function hideReady(){ readyBtn.style.display='none'; }
+
+    function playTransition(){ inTransition=true; stopTimer(); popSound.currentTime=0; popSound.play(); document.body.style.animation='shake .3s'; setTimeout(()=>document.body.style.animation='',300);
+      trans.innerHTML=''; const cone=document.createElement('div'); cone.className='cone'; trans.append(cone);
+      for(let i=0;i<80;i++){ const p=document.createElement('div'); p.className='paper';
+        const theta=Math.random()*2*Math.PI, phi=Math.random()*Math.PI/2, dist=200+Math.random()*200;
+        const tx=Math.cos(theta)*dist, ty=-Math.sin(phi)*dist, tz=Math.sin(theta)*dist;
+        p.style.setProperty('--tx',tx+'px'); p.style.setProperty('--ty',ty+'px'); p.style.setProperty('--tz',tz+'px');
+        p.style.setProperty('--rx',Math.random()); p.style.setProperty('--ry',Math.random()); p.style.setProperty('--rz',Math.random());
+        p.style.left='0'; p.style.bottom='0'; p.style.animation='paper-blast 1.5s ease-out forwards'; trans.append(p);
+      }
+      setTimeout(()=>{ trans.innerHTML=''; inTransition=false; showReady(); },2000);
+    }
+
+    function nextQuestion(){ qIndex++; if(qIndex>total){ endTest(); return;} qnumEl.textContent=`Question: ${qIndex}/${total}`;
+      if(qIndex>1 && (qIndex-1)%10===0){ hideReady(); playTransition(); return; }
+      input=''; fbEl.textContent=''; fbEl.className='feedback'; ansEl.textContent=''; hideReady();
+      a=Math.floor(Math.random()*10); b=Math.floor(Math.random()*10); correct=(a+b).toString(); qEl.textContent=`${a} + ${b} =`;
+      qStart=Date.now();
+    }
+
+    readyBtn.addEventListener('click',()=>{ readyBtn.style.display='none'; startTimer(); nextQuestion(); });
+
+    function endTest(){ playTransition(); endEl.style.display='flex'; finalScoreEl.textContent=`Score: ${score.toLocaleString()}`; }
+
+    function vibratePattern(pattern){ if(navigator.vibrate) navigator.vibrate(pattern); }
+
+    function updateAnswer(){ if(inTransition) return; ansEl.textContent=input;
+      if(input.length===correct.length){
+        if(input===correct){
+          vibratePattern([100,50,100]);
+          const pts=Math.ceil(1000/(Date.now()-qStart)); score+=Number(correct)*pts; scoreEl.textContent=`Score: ${score.toLocaleString()}`; fbEl.className='feedback correct'; fbEl.textContent='Correct';
+          setTimeout(nextQuestion,800);
+        } else {
+          fbEl.className='feedback wrong'; fbEl.textContent='Incorrect'; vibratePattern([300,100,300]);
+        }
+      }
+    }
+
+    pad.addEventListener('click',e=>{ if(inTransition) return; const btn=e.target; if(!btn.matches('button')) return;
+      const num=btn.dataset.num, fn=btn.dataset.fn;
+      if(fn==='back'){ input=input.slice(0,-1); fbEl.textContent=''; fbEl.className='feedback'; updateAnswer(); }
+      else if(fn==='exit'){ window.history.back(); }
+      else if(num!==undefined && input.length<2){ input+=num; updateAnswer(); }
+    });
+
+    nextQuestion();
+  </script>
+</body>
+</html>
+
